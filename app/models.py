@@ -18,6 +18,10 @@ class Game(Base):
 
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
 
+    opponent_shots: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    my_shots: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
