@@ -3,6 +3,7 @@ import uuid
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -10,6 +11,7 @@ from app.fleet import generate_fleet
 from app.models import Game
 from app.schemas import (
     AcceptedResponse,
+    CloseResponse,
     OpponentShotResponse,
     ShotRequest,
     ShotResponse,
@@ -39,13 +41,17 @@ def wrong_request(request: Request, error: RequestValidationError):
     return JSONResponse(status_code=400, content={"detail": "некорректные данные запроса"})
 
 
-def get_game(db: Session, session_id: str) -> Game:
+def parse_session_id(session_id: str) -> uuid.UUID:
     try:
-        game_id = uuid.UUID(session_id)
+        return uuid.UUID(session_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="сессия не найдена")
 
-    game = db.get(Game, game_id)
+
+def get_game(db: Session, session_id: str) -> Game:
+    game_id = parse_session_id(session_id)
+
+    game = db.get(Game, game_id, with_for_update=True)
     if game is None:
         raise HTTPException(status_code=404, detail="сессия не найдена")
     if game.status != "active":
@@ -133,3 +139,27 @@ def opponent_shot(
     db.commit()
 
     return OpponentShotResponse(result=result)
+
+
+@app.post(
+    "/game/{session_id}/close",
+    response_model=CloseResponse,
+    responses={code: ERRORS[code] for code in (400, 404, 500)},
+)
+def close_game(session_id: str, db: Session = Depends(get_db)):
+    game_id = parse_session_id(session_id)
+
+    closed = db.execute(
+        update(Game)
+        .where(Game.session_id == game_id, Game.status == "active")
+        .values(status="closed")
+    )
+    db.commit()
+
+    if closed.rowcount == 1:
+        return CloseResponse(status="closed")
+
+    if db.get(Game, game_id) is None:
+        raise HTTPException(status_code=404, detail="сессия не найдена")
+
+    raise HTTPException(status_code=400, detail="сессия уже закрыта")
