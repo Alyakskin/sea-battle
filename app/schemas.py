@@ -31,3 +31,7 @@ class AcceptedResponse(BaseModel):
 
 class OpponentShotResponse(BaseModel):
     result: str
+
+
+class CloseResponse(BaseModel):
+    status: str

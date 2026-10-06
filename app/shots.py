@@ -1,6 +1,6 @@
 import random
 
-from app.fleet import BOARD_SIZE, format_cell, parse_cell
+from app.fleet import BOARD_SIZE, format_cell, neighbours, parse_cell
 
 RESULTS = ("miss", "hit", "killed")
 
@@ -63,12 +63,28 @@ def targets_around(wounded: list, fired: set) -> list:
     ]
 
 
+def cells_around_killed(my_shots: list) -> set:
+    around = set()
+    ship = []
+    for shot in my_shots:
+        if shot["result"] == "hit":
+            ship.append(shot["coordinate"])
+        elif shot["result"] == "killed":
+            for coordinate in ship + [shot["coordinate"]]:
+                for cell in neighbours(parse_cell(coordinate)):
+                    if on_board(cell):
+                        around.add(format_cell(cell))
+            ship = []
+    return around
+
+
 def choose_shot(my_shots: list) -> str:
     fired = {shot["coordinate"] for shot in my_shots}
+    useless = fired | cells_around_killed(my_shots)
 
     wounded = wounded_cells(my_shots)
     if wounded:
-        targets = targets_around(wounded, fired)
+        targets = targets_around(wounded, useless)
         if targets:
             return targets[0]
 
@@ -77,7 +93,7 @@ def choose_shot(my_shots: list) -> str:
     for col in range(BOARD_SIZE):
         for row in range(BOARD_SIZE):
             coordinate = format_cell((col, row))
-            if coordinate in fired:
+            if coordinate in useless:
                 continue
             free.append(coordinate)
             if (col + row) % 2 == 0:
@@ -87,5 +103,14 @@ def choose_shot(my_shots: list) -> str:
         return random.choice(checkerboard)
     if free:
         return random.choice(free)
+
+    left = [
+        format_cell((col, row))
+        for col in range(BOARD_SIZE)
+        for row in range(BOARD_SIZE)
+        if format_cell((col, row)) not in fired
+    ]
+    if left:
+        return random.choice(left)
 
     raise RuntimeError("стрелять больше некуда")

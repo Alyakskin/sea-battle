@@ -1,7 +1,7 @@
 import pytest
 
 from app.fleet import parse_cell
-from app.shots import answer_shot, choose_shot, targets_around, wounded_cells
+from app.shots import answer_shot, cells_around_killed, choose_shot, targets_around, wounded_cells
 
 SHIPS = [
     {"coordinates": ["A1", "A2", "A3", "A4"]},
@@ -132,6 +132,28 @@ def test_after_kill_service_returns_to_search():
     col, row = parse_cell(coordinate)
     assert (col + row) % 2 == 0
     assert coordinate not in ["D4", "D5"]
+
+
+def test_cells_around_killed_ship_are_found():
+    history = shots(("D4", "hit"), ("D5", "killed"))
+
+    assert cells_around_killed(history) == {
+        "C3", "D3", "E3", "C4", "D4", "E4", "C5", "D5", "E5", "C6", "D6", "E6",
+    }
+
+
+def test_service_does_not_shoot_around_killed_ship():
+    history = shots(("D4", "hit"), ("D5", "killed"))
+    around = {"C3", "D3", "E3", "C4", "E4", "C5", "E5", "C6", "D6", "E6"}
+
+    for _ in range(100):
+        assert choose_shot(history) not in around
+
+
+def test_finishing_a_ship_skips_cells_near_killed_one():
+    history = shots(("B2", "killed"), ("D2", "hit"))
+
+    assert choose_shot(history) in ["E2", "D1", "D3"]
 
 
 def test_targets_around_ignore_cells_outside_the_board():
